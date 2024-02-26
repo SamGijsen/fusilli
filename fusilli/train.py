@@ -29,6 +29,8 @@ def train_and_test(
         project_name=None,
         training_modifications=None,
         metrics_list=None,
+        learning_rate=1e3,
+        weight_decay=0.
 ):
     """
     Trains and tests a model and, if k_fold trained, a fold.
@@ -76,6 +78,11 @@ def train_and_test(
         (AUROC, accuracy for binary/multiclass, R2 and MAE for regression).
         The first metric in the list will be used in the comparison evaluation figures to rank the models' performances.
         Length must be 2 or more.
+    learning_rate : float
+       Sets learning rate for the optimizer. Only applies to supervised steps (pretraining unaffected).
+    weight_decay: float
+        Sets the weight decay of the optimizer. If non-zero, the AdamW optimizer is used instead of Adam.
+        Only applies to supervised steps (pretraining is unaffected).
 
     Returns
     -------
@@ -153,6 +160,8 @@ def train_and_test(
             multiclass_dimensions=data_module.multiclass_dimensions,
         ),
         metrics_list=metrics_list,
+        learning_rate=learning_rate,
+        weight_decay=weight_decay
     )
 
     # modify model architecture if layer_mods is not None
@@ -242,6 +251,8 @@ def train_and_save_models(
         show_loss_plot=False,
         project_name=None,
         metrics_list=None,
+        learning_rate=1e-3,
+        weight_decay=0.
 ):
     """
     Trains/tests the model and saves the trained model to a dictionary for further analysis.
@@ -282,6 +293,10 @@ def train_and_save_models(
         (AUROC, accuracy for binary/multiclass, R2 and MAE for regression).
         The first metric in the list will be used in the comparison evaluation figures to rank the models' performances.
         Length must be 2 or more.
+    learning_rate : float
+       Sets learning rate for the optimizer.
+    weight_decay: float
+        Sets the weight decay of the optimizer. If non-zero, the AdamW optimizer is used instead of Adam.
 
     Returns
     -------
@@ -322,6 +337,8 @@ def train_and_save_models(
                 wandb_logging=wandb_logging,
                 project_name=project_name,
                 metrics_list=metrics_list,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay
             )
 
             trained_models_list.append(trained_model)
@@ -343,6 +360,8 @@ def train_and_save_models(
             wandb_logging=wandb_logging,
             project_name=project_name,
             metrics_list=metrics_list,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay
         )
 
         trained_models_list.append(trained_model)

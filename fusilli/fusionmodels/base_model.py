@@ -69,7 +69,7 @@ class BaseModel(pl.LightningModule):
         Concatenated training preds for all batches. Accessed by Plotter class for plotting.
     """
 
-    def __init__(self, model, metrics_list=None):
+    def __init__(self, model, metrics_list=None, learning_rate=1e-3, weight_decay=0.):
         """
         Parameters
         ----------
@@ -81,6 +81,10 @@ class BaseModel(pl.LightningModule):
             (AUROC, accuracy for binary/multiclass, R2 and MAE for regression).
             The first metric in the list will be used in the comparison evaluation figures to rank the models' performances.
             Length must be 2 or more.
+        learning_rate : float
+            Sets learning rate for the optimizer.
+        weight_decay: float
+            Sets the weight decay of the optimizer. If non-zero, the AdamW optimizer is used instead of Adam.
 
         Returns
         -------
@@ -92,6 +96,8 @@ class BaseModel(pl.LightningModule):
         self.MetricsCalculator = MetricsCalculator(self)
         self.metrics_list = metrics_list
         self.set_metrics(metrics_list=metrics_list)
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
 
         if self.model.prediction_task == "multiclass":
             self.multiclass_dimensions = model.multiclass_dimensions
@@ -476,7 +482,11 @@ class BaseModel(pl.LightningModule):
         """
         Configure optimizers.
         """
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        if self.weight_decay:
+            optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate,
+                                          weight_decay=self.weight_decay)
+        else:
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
 
