@@ -361,9 +361,9 @@ class BaseModel(pl.LightningModule):
 
             else:
                 train_step_metric = metric_func(
-                    preds=self.safe_squeeze(end_output),
-                    labels=self.safe_squeeze(y[self.train_mask]),
-                    logits=self.safe_squeeze(logits),
+                    preds=self.safe_squeeze(end_output.cpu()),
+                    labels=self.safe_squeeze(y[self.train_mask].cpu()),
+                    logits=self.safe_squeeze(logits.cpu()),
                 )
 
                 self.log(
@@ -446,9 +446,9 @@ class BaseModel(pl.LightningModule):
 
         for metric_name, metric_func in self.metrics.items():
             val_step_metric = metric_func(
-                preds=self.safe_squeeze(self.val_preds),
-                labels=self.safe_squeeze(self.val_reals),
-                logits=self.safe_squeeze(self.val_logits),
+                preds=self.safe_squeeze(self.val_preds.cpu()),
+                labels=self.safe_squeeze(self.val_reals.cpu()),
+                logits=self.safe_squeeze(self.val_logits.cpu()),
             ).to(self.device)
 
             self.log(
