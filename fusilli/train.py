@@ -250,6 +250,7 @@ def train_and_save_models(
         enable_checkpointing=True,
         show_loss_plot=False,
         project_name=None,
+        training_modifications=None,
         metrics_list=None,
         learning_rate=1e-3,
         weight_decay=0.
@@ -287,6 +288,8 @@ def train_and_save_models(
     project_name : str or None
         Name of the project to log to in Weights and Biases. Default None.
         If None, the project name will be called "fusilli".
+    training_modifications : dict
+        Dictionary of training modifications. Used to modify the training process. Keys could be "accelerator", "devices"
     metrics_list : list
         List of metrics to use for model evaluation. Default None.
         If None, the metrics will be automatically selected based on the prediction task
@@ -336,6 +339,7 @@ def train_and_save_models(
                 show_loss_plot=show_loss_plot,
                 wandb_logging=wandb_logging,
                 project_name=project_name,
+                training_modifications=training_modifications,
                 metrics_list=metrics_list,
                 learning_rate=learning_rate,
                 weight_decay=weight_decay
@@ -359,6 +363,7 @@ def train_and_save_models(
             show_loss_plot=show_loss_plot,
             wandb_logging=wandb_logging,
             project_name=project_name,
+            training_modifications=training_modifications,
             metrics_list=metrics_list,
             learning_rate=learning_rate,
             weight_decay=weight_decay
