@@ -140,6 +140,23 @@ class CustomDataset(Dataset):
             raise ValueError(
                 f"pred_features must be a list or a tensor, not {type(pred_features)}"
             )
+            
+        # Identify and store indices of missing data for potential imputation
+        if self.multimodal_flag:
+            self.missing_indices1 = torch.isnan(self.dataset1)
+            self.missing_indices2 = torch.isnan(self.dataset2)
+            if self.missing_indices1.any() or self.missing_indices2.any():
+                self.contains_nan = True
+                print("Data contains NaNs which will be imputed.")
+            else: 
+                self.contains_nan = False
+        else:
+            self.missing_indices = torch.isnan(self.dataset)
+            if self.missing_indices.any():
+                self.contains_nan = True
+                print("Data contains NaNs which will be imputed.")
+            else: 
+                self.contains_nan = False
 
         # convert labels to tensor and correct dtype
         label_type = labels[["prediction_label"]].values.dtype
@@ -148,6 +165,59 @@ class CustomDataset(Dataset):
             self.labels = self.labels.long()
         else:
             self.labels = self.labels.float()
+            
+    def impute_data(self, subset_indices, strategy='median'):
+        """
+        Imputes missing data for the specified indices using the given strategy.
+        
+        Parameters
+        ----------
+        indices : array-like
+            Indices of the data subset (train or test) for which imputation is performed.
+        strategy : str, optional
+            Imputation strategy ('mean', 'median', 'mode', etc.), by default 'mean'
+        """
+        if self.multimodal_flag:
+            # Impute for each modality separately
+            for dataset, missing_indices in [(self.dataset1, self.missing_indices1), (self.dataset2, self.missing_indices2)]:
+                # Calculate imputed values only for the subset
+                subset_missing_indices = missing_indices[subset_indices]
+                data_subset = dataset[subset_indices]
+                
+                if subset_missing_indices.any():
+                
+                    # Calculate imputed values based on the strategy
+                    if strategy == 'mean':
+                        imputed_values = torch.nanmean(data_subset, dim=0)
+                    elif strategy == 'median':
+                        imputed_values = torch.nanmedian(data_subset, dim=0)
+                    elif strategy == 'mode':
+                        imputed_values, _ = torch.mode(data_subset, dim=0)
+                    else:
+                        raise ValueError(f"Unsupported imputation strategy: {strategy}")
+                    
+                    for idx, original_idx in enumerate(subset_indices):
+                        self.dataset[original_idx][subset_missing_indices[idx]] = imputed_values[subset_missing_indices[idx]]
+        else:
+            # Unimodal data imputation
+            subset_missing_indices = self.missing_indices[subset_indices]
+            data_subset = self.dataset[subset_indices]
+            
+            if subset_missing_indices.any():
+            
+                # Calculate imputed values based on the strategy
+                if strategy == 'mean':
+                    imputed_values = torch.nanmean(data_subset, dim=0)
+                elif strategy == 'median':
+                    imputed_values = torch.nanmedian(data_subset, dim=0)[0]
+                elif strategy == 'mode':
+                    imputed_values, _ = torch.mode(data_subset, dim=0)
+                else:
+                    raise ValueError(f"Unsupported imputation strategy: {strategy}")
+                
+                for idx, original_idx in enumerate(subset_indices):
+                    self.dataset[original_idx][subset_missing_indices[idx]] = imputed_values[subset_missing_indices[idx]]
+                
 
     def __len__(self):
         """
@@ -176,6 +246,8 @@ class CustomDataset(Dataset):
             return self.dataset1[idx], self.dataset2[idx], self.labels[idx]
         else:
             return self.dataset[idx], self.labels[idx]
+        
+
 
 
 class LoadDatasets:
@@ -440,6 +512,7 @@ class TrainTestDataModule(pl.LightningDataModule):
             multiclass_dimensions,
             subspace_method=None,
             image_downsample_size=None,
+            impute_nan="median",
             layer_mods=None,
             max_epochs=1000,
             extra_log_string_dict=None,
@@ -472,6 +545,8 @@ class TrainTestDataModule(pl.LightningDataModule):
             Size to downsample the images to (height, width, depth) or (height, width) for 2D
             images.
             None if not downsampling. (default None)
+        impute_nan: str
+            String specifying how NaN values are imputed: median or mean (default median)
         layer_mods : dict
             Dictionary of layer modifications to make to the subspace method.
             (default None)
@@ -505,6 +580,7 @@ class TrainTestDataModule(pl.LightningDataModule):
                 self.sources, image_downsample_size
             ).load_tab_and_img,
         }
+        self.impute_nan = impute_nan
         self.fusion_model = fusion_model
         self.modality_type = self.fusion_model.modality_type
         self.batch_size = batch_size
@@ -572,6 +648,12 @@ class TrainTestDataModule(pl.LightningDataModule):
             self.train_dataset = torch.utils.data.Subset(
                 self.dataset, list(set(range(len(self.dataset))) - set(self.test_indices))
             )
+        # impute data
+        if self.dataset.contains_nan:
+            train_idx = self.train_dataset.indices
+            test_idx = self.test_dataset.indices
+            self.dataset.impute_data(train_idx, strategy=self.impute_nan)
+            self.dataset.impute_data(test_idx, strategy=self.impute_nan)
 
         if self.subspace_method is not None:  # if subspace method is specified
             if (
@@ -738,6 +820,7 @@ class KFoldDataModule(pl.LightningDataModule):
             multiclass_dimensions,
             subspace_method=None,
             image_downsample_size=None,
+            impute_nan="median",
             layer_mods=None,
             max_epochs=1000,
             extra_log_string_dict=None,
@@ -772,6 +855,8 @@ class KFoldDataModule(pl.LightningDataModule):
         image_downsample_size : tuple
             Size to downsample the images to (height, width, depth) or (height, width) for 2D
             images. None if not downsampling. (default None)
+        impute_nan: str
+            String specifying how NaN values are imputed: median or mean (default median)
         layer_mods : dict
             Dictionary of layer modifications to make to the subspace method.
             (default None)
@@ -796,6 +881,7 @@ class KFoldDataModule(pl.LightningDataModule):
         self.sources = sources
         self.output_paths = output_paths
         self.image_downsample_size = image_downsample_size
+        self.impute_nan = impute_nan
         self.extra_log_string_dict = extra_log_string_dict
         self.modality_methods = {
             "tabular1": LoadDatasets(
@@ -867,10 +953,15 @@ class KFoldDataModule(pl.LightningDataModule):
 
         folds = []
         for train_indices, val_indices in split_kf:
+            if self.dataset.contains_nan:
+                # impute data for the current fold
+                self.dataset.impute_data(train_indices, strategy=self.impute_nan)
+                self.dataset.impute_data(val_indices, strategy=self.impute_nan)
+            
             # split the dataset into train and test sets for each fold
             train_dataset = torch.utils.data.Subset(self.dataset, train_indices)
             test_dataset = torch.utils.data.Subset(self.dataset, val_indices)
-
+                        
             # append the train and test datasets to the folds list
             folds.append((train_dataset, test_dataset))
 
