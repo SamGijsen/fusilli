@@ -179,45 +179,39 @@ class CustomDataset(Dataset):
         """
         if self.multimodal_flag:
             # Impute for each modality separately
-            for dataset, missing_indices in [(self.dataset1, self.missing_indices1), (self.dataset2, self.missing_indices2)]:
-                # Calculate imputed values only for the subset
-                subset_missing_indices = missing_indices[subset_indices]
-                data_subset = dataset[subset_indices]
-                
-                if subset_missing_indices.any():
-                
-                    # Calculate imputed values based on the strategy
-                    if strategy == 'mean':
-                        imputed_values = torch.nanmean(data_subset, dim=0)
-                    elif strategy == 'median':
-                        imputed_values = torch.nanmedian(data_subset, dim=0)
-                    elif strategy == 'mode':
-                        imputed_values, _ = torch.mode(data_subset, dim=0)
-                    else:
-                        raise ValueError(f"Unsupported imputation strategy: {strategy}")
+            subset_missing_indices = self.missing_indices1[subset_indices]
+            data_subset = self.dataset1[subset_indices]
+            if subset_missing_indices.any():
+                imputed_values = self._imputer(data_subset, strategy)
+                for idx, original_idx in enumerate(subset_indices):
+                    self.dataset1[original_idx][subset_missing_indices[idx]] = imputed_values[subset_missing_indices[idx]]
                     
-                    for idx, original_idx in enumerate(subset_indices):
-                        self.dataset[original_idx][subset_missing_indices[idx]] = imputed_values[subset_missing_indices[idx]]
+            subset_missing_indices = self.missing_indices2[subset_indices]
+            data_subset = self.dataset2[subset_indices]
+            if subset_missing_indices.any():
+                imputed_values = self._imputer(data_subset, strategy)
+                for idx, original_idx in enumerate(subset_indices):
+                    self.dataset2[original_idx][subset_missing_indices[idx]] = imputed_values[subset_missing_indices[idx]]
         else:
             # Unimodal data imputation
             subset_missing_indices = self.missing_indices[subset_indices]
             data_subset = self.dataset[subset_indices]
-            
             if subset_missing_indices.any():
-            
-                # Calculate imputed values based on the strategy
-                if strategy == 'mean':
-                    imputed_values = torch.nanmean(data_subset, dim=0)
-                elif strategy == 'median':
-                    imputed_values = torch.nanmedian(data_subset, dim=0)[0]
-                elif strategy == 'mode':
-                    imputed_values, _ = torch.mode(data_subset, dim=0)
-                else:
-                    raise ValueError(f"Unsupported imputation strategy: {strategy}")
-                
+                imputed_values = self._imputer(data_subset, strategy)
                 for idx, original_idx in enumerate(subset_indices):
                     self.dataset[original_idx][subset_missing_indices[idx]] = imputed_values[subset_missing_indices[idx]]
-                
+                    
+    def _imputer(self, data, strategy):
+        if strategy == 'mean':
+            imputed_values = torch.nanmean(data, dim=0)
+        elif strategy == 'median':
+            imputed_values = torch.nanmedian(data, dim=0).values
+        elif strategy == 'mode':
+            imputed_values, _ = torch.mode(data, dim=0)
+        else:
+            raise ValueError(f"Unsupported imputation strategy: {strategy}")
+        return imputed_values
+
 
     def __len__(self):
         """
